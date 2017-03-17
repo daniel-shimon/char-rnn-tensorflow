@@ -12,9 +12,11 @@ from six import text_type
 
 def main():
     parser = argparse.ArgumentParser(
-                       formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--save_dir', type=str, default='save',
                         help='model directory to store checkpointed models')
+    parser.add_argument('--output_file', type=str, default=None,
+                        help='output sample to a specific file')
     parser.add_argument('-n', type=int, default=500,
                         help='number of characters to sample')
     parser.add_argument('--prime', type=text_type, default=u' ',
@@ -39,8 +41,18 @@ def sample(args):
         ckpt = tf.train.get_checkpoint_state(args.save_dir)
         if ckpt and ckpt.model_checkpoint_path:
             saver.restore(sess, ckpt.model_checkpoint_path)
-            print(model.sample(sess, chars, vocab, args.n, args.prime,
-                               args.sample).encode('utf-8'))
+            output = model.sample(sess, chars, vocab, args.n, args.prime,
+                                  args.sample).encode('utf-8')
+
+            if args.output_file is not None:
+                dir_name = os.path.dirname(args.output_file)
+                if dir_name != '':
+                    os.makedirs(dir_name)
+                with open(args.output_file, 'w') as output_file:
+                    output_file.write(output)
+            else:
+                print(output)
+
 
 if __name__ == '__main__':
     main()
