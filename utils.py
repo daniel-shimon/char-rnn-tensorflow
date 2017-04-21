@@ -22,21 +22,38 @@ class TextLoader:
         self.encoding = encoding
 
         input_file = os.path.join(data_dir, "input.txt")
+        input_foloder = os.path.join(data_dir, "inputs")
         vocab_file = os.path.join(data_dir, "vocab.pkl")
         tensor_file = os.path.join(data_dir, "data.npy")
 
         if not (os.path.exists(vocab_file) and os.path.exists(tensor_file)):
-            print("reading text file")
-            self.preprocess(input_file, vocab_file, tensor_file)
+            if os.path.exists(input_file):
+                print("reading text file")
+                self.preprocess(input_file, vocab_file, tensor_file, False)
+            elif os.path.exists(input_foloder):
+                print("reading text files")
+                self.preprocess(input_foloder, vocab_file, tensor_file, True)
+            else:
+                raise EnvironmentError('{} and {} do not exist'.format(input_file, input_foloder))
+
         else:
             print("loading preprocessed files")
             self.load_preprocessed(vocab_file, tensor_file)
         self.create_batches()
         self.reset_batch_pointer()
 
-    def preprocess(self, input_file, vocab_file, tensor_file):
-        with codecs.open(input_file, "r", encoding=self.encoding) as f:
-            data = f.read()
+    def preprocess(self, data_path, vocab_file, tensor_file, is_data_folder):
+        if is_data_folder:
+            data = ''
+            # load multiple files with start-of-text and end-of-text chars
+            for filename in os.listdir(data_path):
+                with codecs.open(os.path.join(data_path, filename),
+                                 "r", encoding=self.encoding) as f:
+                    data += '\x02' + f.read() + '\x03'
+        else:
+            with codecs.open(data_path, "r", encoding=self.encoding) as f:
+                data = f.read()
+
         counter = collections.Counter(data)
         count_pairs = sorted(counter.items(), key=lambda x: -x[1])
         self.chars, _ = zip(*count_pairs)
