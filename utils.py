@@ -5,8 +5,17 @@ from six.moves import cPickle
 import numpy as np
 
 
-class TextLoader():
+class TextLoader:
     def __init__(self, data_dir, batch_size, seq_length, encoding='utf-8'):
+        self.chars = 0
+        self.vocab = None
+        self.vocab_size = 0
+        self.tensor = None
+        self.num_batches = 0
+        self.x_batches = None
+        self.y_batches = None
+        self.pointer = None
+
         self.data_dir = data_dir
         self.batch_size = batch_size
         self.seq_length = seq_length
