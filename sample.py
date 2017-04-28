@@ -26,7 +26,7 @@ def main():
                              '(maximum when using start and stop chars)')
     parser.add_argument('--prime', type=text_type, default=u' ',
                         help='prime text')
-    parser.add_argument('--with-start-and-stop', action='store_true',
+    parser.add_argument('--whole', action='store_true',
                         help='prime the text with a start char and finish at the first end char '
                              '(or after n chars when n >= 0)')
     parser.add_argument('--sample', type=int, default=1,
@@ -48,7 +48,7 @@ def sample(args):
         if ckpt and ckpt.model_checkpoint_path:
             saver.restore(sess, ckpt.model_checkpoint_path)
             output = model.sample(sess, chars, vocab, args.n, args.prime,
-                                     args.sample, args.with_start_and_stop)
+                                     args.sample, args.whole)
 
             if args.output_file is not None:
                 dir_name = os.path.dirname(args.output_file)

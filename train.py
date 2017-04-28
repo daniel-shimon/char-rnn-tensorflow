@@ -23,7 +23,7 @@ def main():
                         help='single name to use under directories (data, save and log)')
     parser.add_argument('--rnn-size', type=int, default=512,
                         help='size of RNN hidden state')
-    parser.add_argument('--num_layers', type=int, default=2,
+    parser.add_argument('--num-layers', type=int, default=2,
                         help='number of layers in the RNN')
     parser.add_argument('--model', type=str, default='lstm',
                         help='rnn, gru, lstm, or nas')
@@ -83,6 +83,9 @@ def train(args):
             state = sess.run(model.initial_state)
 
             for b in range(data_loader.num_batches):
+                if b in data_loader.clean_state_batches:
+                    state = sess.run(model.initial_state)
+
                 start = time.time()
                 x, y = data_loader.next_batch()
                 feed = {model.input_data: x, model.targets: y}
@@ -154,7 +157,7 @@ def load_data(args):
             assert saved_vocab == data_loader.vocab, "Data and loaded model disagree on dictionary mappings!"
         except AssertionError as e:
             if args.dataset:
-                print('model from ' + args.init_from + ' cannot be used:', str(e))
+                print('model from ' + args.init_from + ' will not be used:', str(e))
                 args.init_from = None
             else:
                 raise e
