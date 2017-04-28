@@ -33,7 +33,7 @@ def main():
                         help='RNN sequence length')
     parser.add_argument('--num-epochs', type=int, default=50,
                         help='number of epochs')
-    parser.add_argument('--save-every', type=int, default=100,
+    parser.add_argument('--save-every', type=int, default=50,
                         help='save frequency')
     parser.add_argument('--grad-clip', type=float, default=5.,
                         help='clip gradients at this value')
@@ -59,6 +59,7 @@ def main():
 
 def train(args):
     ckpt, data_loader, model = load_data(args)
+    initial_iteration = 0
 
     with tf.Session() as sess:
         # instrument for tensorboard
@@ -75,6 +76,8 @@ def train(args):
             if os.path.exists(args.init_from):
                 print('initiating model from ' + args.init_from)
                 saver.restore(sess, ckpt.model_checkpoint_path)
+                with open(os.path.join(args.save_dir, 'step.info'), 'r') as f:
+                    initial_iteration = int(f.read())
 
         for e in range(args.num_epochs):
             sess.run(tf.assign(model.lr,
@@ -83,6 +86,7 @@ def train(args):
             state = sess.run(model.initial_state)
 
             for b in range(data_loader.num_batches):
+                current_iteration = e * data_loader.num_batches + b
                 if b in data_loader.clean_state_batches:
                     state = sess.run(model.initial_state)
 
@@ -96,22 +100,24 @@ def train(args):
 
                 # instrument for tensorboard
                 summ, train_loss, state, _ = sess.run([summaries, model.cost, model.final_state, model.train_op], feed)
-                writer.add_summary(summ, e * data_loader.num_batches + b)
+                writer.add_summary(summ, initial_iteration + current_iteration)
 
                 end = time.time()
                 print("{}/{} (epoch {}), train_loss = {:.3f}, time/batch = {:.3f}"
-                      .format(e * data_loader.num_batches + b,
+                      .format(current_iteration,
                               args.num_epochs * data_loader.num_batches,
                               e, train_loss, end - start))
 
-                if (e * data_loader.num_batches + b) % args.save_every == 0\
+                if current_iteration % args.save_every == 0\
                         or (e == args.num_epochs - 1 and
                             b == data_loader.num_batches - 1):
                     # save for the last result
                     checkpoint_path = os.path.join(args.save_dir, 'model.ckpt')
                     saver.save(sess, checkpoint_path,
-                               global_step=e * data_loader.num_batches + b)
-                    print("model saved to {}".format(checkpoint_path))
+                               global_step=initial_iteration + current_iteration)
+                    with open(os.path.join(args.save_dir, 'step.info'), 'w') as f:
+                        f.write(str(initial_iteration + current_iteration + 1))
+                    print("model saved to {}".format(args.save_dir))
 
 
 def load_data(args):
@@ -135,9 +141,14 @@ def load_data(args):
         try:
             assert os.path.isdir(args.init_from), " %s must be a a path" % args.init_from
             assert os.path.isfile(
-                os.path.join(args.init_from, "config.pkl")), "config.pkl file does not exist in path %s" % args.init_from
+                os.path.join(args.init_from, "config.pkl")), \
+                "config.pkl file does not exist in path %s" % args.init_from
             assert os.path.isfile(os.path.join(args.init_from,
-                                               "chars_vocab.pkl")), "chars_vocab.pkl.pkl file does not exist in path %s" % args.init_from
+                                               "chars_vocab.pkl")), \
+                "chars_vocab.pkl file does not exist in path %s" % args.init_from
+            assert os.path.isfile(os.path.join(args.init_from,
+                                               "step.info")), \
+                "step.info file does not exist in path %s" % args.init_from
             ckpt = tf.train.get_checkpoint_state(args.init_from)
             assert ckpt, "No checkpoint found"
             assert ckpt.model_checkpoint_path, "No model path found in checkpoint"
@@ -145,7 +156,7 @@ def load_data(args):
             # open old config and check if models are compatible
             with open(os.path.join(args.init_from, 'config.pkl'), 'rb') as f:
                 saved_model_args = cPickle.load(f)
-            need_be_same = ["model", "rnn_size", "num_layers", "seq_length"]
+            need_be_same = ["model", "rnn_size", "num_layers"]
             for key in need_be_same:
                 saved_value = vars(saved_model_args)[key]
                 if vars(args)[key] is None:

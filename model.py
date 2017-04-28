@@ -36,9 +36,11 @@ class Model():
         self.cell = cell = rnn.MultiRNNCell(cells, state_is_tuple=True)
 
         self.input_data = tf.placeholder(
-            tf.int32, [args.batch_size, args.seq_length])
+            tf.int32, [args.batch_size, args.seq_length],
+            name='input-data-%d-%d' % (args.batch_size, args.seq_length))
         self.targets = tf.placeholder(
-            tf.int32, [args.batch_size, args.seq_length])
+            tf.int32, [args.batch_size, args.seq_length],
+            name='targets-%d-%d' % (args.batch_size, args.seq_length))
         self.initial_state = cell.zero_state(args.batch_size, tf.float32)
 
         with tf.variable_scope('rnnlm'):
@@ -47,7 +49,9 @@ class Model():
             softmax_b = tf.get_variable("softmax_b", [args.vocab_size])
 
         embedding = tf.get_variable("embedding", [args.vocab_size, args.rnn_size])
-        inputs = tf.nn.embedding_lookup(embedding, self.input_data)
+        inputs = tf.nn.embedding_lookup(
+            embedding, self.input_data,
+            name='inputs-%d-%d' % (args.batch_size, args.seq_length))
 
         # dropout beta testing: double check which one should affect next line
         if training and args.output_keep_prob:
@@ -70,7 +74,8 @@ class Model():
         loss = legacy_seq2seq.sequence_loss_by_example(
             [self.logits],
             [tf.reshape(self.targets, [-1])],
-            [tf.ones([args.batch_size * args.seq_length])])
+            [tf.ones([args.batch_size * args.seq_length])],
+            name='loss-%d-%d' % (args.batch_size, args.seq_length))
         self.cost = tf.reduce_sum(loss) / args.batch_size / args.seq_length
         with tf.name_scope('cost'):
             self.cost = tf.reduce_sum(loss) / args.batch_size / args.seq_length
