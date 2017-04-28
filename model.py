@@ -88,8 +88,8 @@ class Model():
         tf.summary.histogram('loss', loss)
         tf.summary.scalar('train_loss', self.cost)
 
-    def sample(self, sess, chars, vocab, num, prime, sampling_type=1, with_start_and_stop=False):
-        if with_start_and_stop:
+    def sample(self, sess, chars, vocab, num, prime, sampling_type, split_mode):
+        if split_mode:
             prime = '\x02'
 
         state = sess.run(self.cell.zero_state(1, tf.float32))
@@ -104,7 +104,7 @@ class Model():
             s = np.sum(weights)
             return int(np.searchsorted(t, np.random.rand(1) * s))
 
-        if with_start_and_stop:
+        if split_mode:
             rounds = itertools.count()
         else:
             rounds = range(num)
@@ -112,11 +112,7 @@ class Model():
                 yield char
 
         char = prime[-1]
-        for n in rounds:
-            if with_start_and_stop:
-                if 0 <= num <= n:
-                    break
-
+        for _ in rounds:
             x = np.zeros((1, 1))
             x[0, 0] = vocab[char]
             feed = {self.input_data: x, self.initial_state: state}
@@ -136,7 +132,7 @@ class Model():
             pred = chars[sample]
             char = pred
 
-            if pred == '\x03':
+            if split_mode and pred == '\x03':
                 break
 
             yield pred

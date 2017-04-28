@@ -1,6 +1,5 @@
 import codecs
 import os
-import collections
 from six.moves import cPickle
 import numpy as np
 
@@ -21,6 +20,7 @@ class TextLoader:
         self.data_dir = data_dir
         self.batch_size = batch_size
         self.seq_length = seq_length
+        self.partition_size = batch_size * seq_length
         self.encoding = encoding
 
         input_file = os.path.join(data_dir, "input.txt")
@@ -42,7 +42,6 @@ class TextLoader:
 
         else:
             print("loading preprocessed files")
-            # return whether in split mode
             self.load_preprocessed(vocab_file, tensor_file)
         self.create_batches()
         self.reset_batch_pointer()
@@ -103,34 +102,28 @@ class TextLoader:
             self.num_batches, self.x_batches, self.y_batches = self.tensor_to_batches(self.tensor)
 
     def tensor_to_batches(self, tensor):
-        num_batches = int((tensor.size - 1) / self.batch_size)
-        x_batches = []
-        y_batches = []
+        num_batches = int((tensor.size - 1) / self.partition_size)
+
+        if self.split_mode:
+            if num_batches * self.partition_size + 1 < tensor.size:
+                num_batches += 1
+                desired_size = num_batches * self.partition_size + 1
+                tensor = np.pad(tensor, (0, desired_size - tensor.size), 'constant', constant_values=self.vocab['\x03'])
+            if num_batches == 0:
+                return 0, [], []
 
         # When the data (tensor) is too small,
         # let's give them a better error message
-        if num_batches == 0:
-            if self.split_mode:
-                extra_tensor = tensor
-            else:
-                raise AssertionError("Not enough data. Make batch_size smaller.")
-        else:
-            clipped_tensor = tensor[:num_batches * self.batch_size + 1]
-            extra_tensor = tensor[num_batches * self.batch_size:]
-            x_data = clipped_tensor[:-1]
-            y_data = np.copy(clipped_tensor[1:])
+        assert num_batches != 0, "Not enough data. Make batch_size smaller."
 
-            x_batches = np.split(x_data.reshape(self.batch_size, -1),
-                                 num_batches, 1)
-            y_batches = np.split(y_data.reshape(self.batch_size, -1),
-                                 num_batches, 1)
+        clipped_tensor = tensor[:num_batches * self.partition_size + 1]
+        x_data = clipped_tensor[:-1]
+        y_data = np.copy(clipped_tensor[1:])
 
-        if extra_tensor.size > 1:
-            num_batches += 1
-            x_data = extra_tensor[:-1]
-            y_data = np.copy(extra_tensor[1:])
-            x_batches.append(x_data.reshape(-1, 1))
-            y_batches.append(y_data.reshape(-1, 1))
+        x_batches = np.split(x_data.reshape(self.batch_size, -1),
+                             num_batches, 1)
+        y_batches = np.split(y_data.reshape(self.batch_size, -1),
+                             num_batches, 1)
 
         return num_batches, x_batches, y_batches
 

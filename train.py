@@ -146,15 +146,17 @@ def load_data(args):
             with open(os.path.join(args.init_from, 'config.pkl'), 'rb') as f:
                 saved_model_args = cPickle.load(f)
             need_be_same = ["model", "rnn_size", "num_layers", "seq_length"]
-            for checkme in need_be_same:
-                assert vars(saved_model_args)[checkme] == vars(args)[
-                    checkme], "Command line argument and saved model disagree on '%s' " % checkme
+            for key in need_be_same:
+                assert vars(saved_model_args)[key] == vars(args)[
+                    key], "Command line argument and saved model disagree on '%s' " % key
 
             # open saved vocab/dict and check if vocabs/dicts are compatible
             with open(os.path.join(args.init_from, 'chars_vocab.pkl'), 'rb') as f:
-                saved_chars, saved_vocab = cPickle.load(f)
+                saved_chars, saved_vocab, saved_split_mode = cPickle.load(f)
             assert saved_chars == data_loader.chars, "Data and loaded model disagree on character set!"
             assert saved_vocab == data_loader.vocab, "Data and loaded model disagree on dictionary mappings!"
+            assert saved_split_mode == data_loader.split_mode, "Data and loaded model disagree on " \
+                                                               "whether input is split files!"
         except AssertionError as e:
             if args.dataset:
                 print('model from ' + args.init_from + ' will not be used:', str(e))
@@ -168,7 +170,7 @@ def load_data(args):
     with open(os.path.join(args.save_dir, 'config.pkl'), 'wb') as f:
         cPickle.dump(args, f)
     with open(os.path.join(args.save_dir, 'chars_vocab.pkl'), 'wb') as f:
-        cPickle.dump((data_loader.chars, data_loader.vocab), f)
+        cPickle.dump((data_loader.chars, data_loader.vocab, data_loader.split_mode), f)
 
     model = Model(args)
 

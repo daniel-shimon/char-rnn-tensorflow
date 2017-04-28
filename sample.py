@@ -22,13 +22,9 @@ def main():
     parser.add_argument('--output-file', type=str, default=None,
                         help='output sample to a specific file')
     parser.add_argument('-n', type=int, default=500,
-                        help='number of characters to sample '
-                             '(maximum when using start and stop chars)')
+                        help='number of characters to sample')
     parser.add_argument('--prime', type=text_type, default=u' ',
                         help='prime text')
-    parser.add_argument('--whole', action='store_true',
-                        help='prime the text with a start char and finish at the first end char '
-                             '(or after n chars when n >= 0)')
     parser.add_argument('--sample', type=int, default=1,
                         help='0 to use max at each timestep, 1 to sample at '
                              'each timestep, 2 to sample on spaces')
@@ -38,7 +34,7 @@ def main():
 
 
 def sample(args):
-    chars, model, vocab = load_data(args)
+    chars, model, vocab, split_mode = load_data(args)
 
     with tf.Session() as sess:
         tf.global_variables_initializer().run()
@@ -48,7 +44,7 @@ def sample(args):
         if ckpt and ckpt.model_checkpoint_path:
             saver.restore(sess, ckpt.model_checkpoint_path)
             output = model.sample(sess, chars, vocab, args.n, args.prime,
-                                     args.sample, args.whole)
+                                  args.sample, split_mode)
 
             if args.output_file is not None:
                 dir_name = os.path.dirname(args.output_file)
@@ -70,11 +66,11 @@ def load_data(args):
     with open(os.path.join(args.save_dir, 'config.pkl'), 'rb') as f:
         saved_args = cPickle.load(f)
     with open(os.path.join(args.save_dir, 'chars_vocab.pkl'), 'rb') as f:
-        chars, vocab = cPickle.load(f)
+        chars, vocab, split_mode = cPickle.load(f)
 
     model = Model(saved_args, training=False)
 
-    return chars, model, vocab
+    return chars, model, vocab, split_mode
 
 
 if __name__ == '__main__':
