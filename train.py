@@ -21,9 +21,9 @@ def main():
                         help='directory to store tensorboard logs')
     parser.add_argument('--dataset', type=str, default=None,
                         help='single name to use under directories (data, save and log)')
-    parser.add_argument('--rnn-size', type=int, default=512,
+    parser.add_argument('--rnn-size', type=int, default=None,
                         help='size of RNN hidden state')
-    parser.add_argument('--num-layers', type=int, default=2,
+    parser.add_argument('--num-layers', type=int, default=None,
                         help='number of layers in the RNN')
     parser.add_argument('--model', type=str, default='lstm',
                         help='rnn, gru, lstm, or nas')
@@ -147,8 +147,12 @@ def load_data(args):
                 saved_model_args = cPickle.load(f)
             need_be_same = ["model", "rnn_size", "num_layers", "seq_length"]
             for key in need_be_same:
-                assert vars(saved_model_args)[key] == vars(args)[
-                    key], "Command line argument and saved model disagree on '%s' " % key
+                saved_value = vars(saved_model_args)[key]
+                if vars(args)[key] is None:
+                    setattr(args, key, saved_value)
+                else:
+                    assert saved_value == vars(args)[key], \
+                        "Command line argument and saved model disagree on '%s' " % key
 
             # open saved vocab/dict and check if vocabs/dicts are compatible
             with open(os.path.join(args.init_from, 'chars_vocab.pkl'), 'rb') as f:
@@ -163,6 +167,9 @@ def load_data(args):
                 args.init_from = None
             else:
                 raise e
+
+    assert args.rnn_size is not None, 'missing rnn size'
+    assert args.num_layers is not None, 'missing rnn size'
 
     if not os.path.isdir(args.save_dir):
         os.makedirs(args.save_dir)
