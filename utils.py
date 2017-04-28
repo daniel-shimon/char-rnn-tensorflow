@@ -1,5 +1,7 @@
 import codecs
 import os
+import random
+
 from six.moves import cPickle
 import numpy as np
 
@@ -15,7 +17,6 @@ class TextLoader:
         self.y_batches = None
         self.pointer = None
         self.split_mode = None
-        self.clean_state_batches = []
 
         self.data_dir = data_dir
         self.batch_size = batch_size
@@ -86,46 +87,32 @@ class TextLoader:
 
     def create_batches(self):
         if self.split_mode:
-            self.clean_state_batches = []
-            self.x_batches = []
-            self.y_batches = []
-            self.num_batches = 0
+            tensor = []
+            indices = range(self.tensor.shape[0])
+            random.shuffle(indices)
 
-            # iterate over examples (files)
-            for i in range(self.tensor.shape[0]):
-                num_batches, x_batches, y_batches = self.tensor_to_batches(self.tensor[i])
-                self.clean_state_batches.append(self.num_batches)
-                self.num_batches += num_batches
-                self.x_batches.extend(x_batches)
-                self.y_batches.extend(y_batches)
+            for i in indices:
+                tensor.extend(self.tensor[i])
+
+            tensor = np.array(tensor)
         else:
-            self.num_batches, self.x_batches, self.y_batches = self.tensor_to_batches(self.tensor)
+            tensor = self.tensor
 
-    def tensor_to_batches(self, tensor):
-        num_batches = int((tensor.size - 1) / self.partition_size)
-
-        if self.split_mode:
-            if num_batches * self.partition_size + 1 < tensor.size:
-                num_batches += 1
-                desired_size = num_batches * self.partition_size + 1
-                tensor = np.pad(tensor, (0, desired_size - tensor.size), 'constant', constant_values=self.vocab['\x03'])
-            if num_batches == 0:
-                return 0, [], []
+        # create batches
+        self.num_batches = int((tensor.size - 1) / self.partition_size)
 
         # When the data (tensor) is too small,
         # let's give them a better error message
-        assert num_batches != 0, "Not enough data. Make batch_size smaller."
+        assert self.num_batches != 0, "Not enough data. Make batch_size smaller."
 
-        clipped_tensor = tensor[:num_batches * self.partition_size + 1]
+        clipped_tensor = tensor[:self.num_batches * self.partition_size + 1]
         x_data = clipped_tensor[:-1]
         y_data = np.copy(clipped_tensor[1:])
 
-        x_batches = np.split(x_data.reshape(self.batch_size, -1),
-                             num_batches, 1)
-        y_batches = np.split(y_data.reshape(self.batch_size, -1),
-                             num_batches, 1)
-
-        return num_batches, x_batches, y_batches
+        self.x_batches = np.split(x_data.reshape(self.batch_size, -1),
+                                  self.num_batches, 1)
+        self.y_batches = np.split(y_data.reshape(self.batch_size, -1),
+                                  self.num_batches, 1)
 
     def next_batch(self):
         x, y = self.x_batches[self.pointer], self.y_batches[self.pointer]

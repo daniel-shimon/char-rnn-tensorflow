@@ -80,15 +80,15 @@ def train(args):
                     initial_iteration = int(f.read())
 
         for e in range(args.num_epochs):
-            sess.run(tf.assign(model.lr,
-                               args.learning_rate * (args.decay_rate ** e)))
+            if data_loader.split_mode and e > 0:
+                data_loader.create_batches()
             data_loader.reset_batch_pointer()
             state = sess.run(model.initial_state)
+            sess.run(tf.assign(model.lr,
+                               args.learning_rate * (args.decay_rate ** e)))
 
             for b in range(data_loader.num_batches):
                 current_iteration = e * data_loader.num_batches + b
-                if b in data_loader.clean_state_batches:
-                    state = sess.run(model.initial_state)
 
                 start = time.time()
                 x, y = data_loader.next_batch()
