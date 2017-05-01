@@ -25,6 +25,8 @@ def main():
                         help='number of characters to sample')
     parser.add_argument('--prime', type=text_type, default=u' ',
                         help='prime text')
+    parser.add_argument('--temp', type=float, default=0.5,
+                        help='temperature (0 < temp <= 1)')
     parser.add_argument('--sample', type=int, default=1,
                         help='0 to use max at each timestep, 1 to sample at '
                              'each timestep, 2 to sample on spaces')
@@ -44,7 +46,7 @@ def sample(args):
         if ckpt and ckpt.model_checkpoint_path:
             saver.restore(sess, ckpt.model_checkpoint_path)
             output = model.sample(sess, chars, vocab, args.n, args.prime,
-                                  args.sample, split_mode)
+                                  args.sample, split_mode, args.temp)
 
             if args.output_file is not None:
                 dir_name = os.path.dirname(args.output_file)

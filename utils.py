@@ -26,28 +26,28 @@ class TextLoader:
 
         input_file = os.path.join(data_dir, "input.txt")
         input_folder = os.path.join(data_dir, "inputs")
-        vocab_file = os.path.join(data_dir, "vocab.pkl")
-        tensor_file = os.path.join(data_dir, "data.npy")
+        self.vocab_file = os.path.join(data_dir, "vocab.pkl")
+        self.input_tensor_file = os.path.join(data_dir, "data.npy")
 
-        if not (os.path.exists(vocab_file) and os.path.exists(tensor_file)):
+        if not (os.path.exists(self.vocab_file) and os.path.exists(self.input_tensor_file)):
             if os.path.exists(input_file):
                 print("reading text file")
                 self.split_mode = False
-                self.preprocess(input_file, vocab_file, tensor_file)
+                self.preprocess(input_file)
             elif os.path.exists(input_folder):
                 print("reading text files")
                 self.split_mode = True
-                self.preprocess(input_folder, vocab_file, tensor_file)
+                self.preprocess(input_folder)
             else:
                 raise EnvironmentError('neither {} nor {} exist'.format(input_file, input_folder))
 
         else:
             print("loading preprocessed files")
-            self.load_preprocessed(vocab_file, tensor_file)
+            self.load_preprocessed()
         self.create_batches()
         self.reset_batch_pointer()
 
-    def preprocess(self, data_path, vocab_file, tensor_file):
+    def preprocess(self, data_path):
         if self.split_mode:
             data = []
             self.chars = set()
@@ -66,7 +66,7 @@ class TextLoader:
 
         self.vocab_size = len(self.chars)
         self.vocab = dict(zip(self.chars, range(len(self.chars))))
-        with open(vocab_file, 'wb') as f:
+        with open(self.vocab_file, 'wb') as f:
             cPickle.dump((self.chars, self.vocab_size, self.vocab, self.split_mode), f)
 
         if self.split_mode:
@@ -77,13 +77,13 @@ class TextLoader:
         else:
             self.tensor = np.array(list(map(self.vocab.get, data)))
 
-        np.save(tensor_file, self.tensor)
+        np.save(self.input_tensor_file, self.tensor)
 
-    def load_preprocessed(self, vocab_file, tensor_file):
-        with open(vocab_file, 'rb') as f:
+    def load_preprocessed(self):
+        with open(self.vocab_file, 'rb') as f:
             self.chars, self.vocab_size, self.vocab, self.split_mode = cPickle.load(f)
 
-        self.tensor = np.load(tensor_file)
+        self.tensor = np.load(self.input_tensor_file)
 
     def create_batches(self):
         if self.split_mode:

@@ -93,7 +93,7 @@ class Model():
         tf.summary.histogram('loss', loss)
         tf.summary.scalar('train_loss', self.cost)
 
-    def sample(self, sess, chars, vocab, num, prime, sampling_type, split_mode):
+    def sample(self, sess, chars, vocab, num, prime, sampling_type, split_mode, temperature):
         if split_mode:
             prime = '\x02'
 
@@ -107,7 +107,8 @@ class Model():
         def weighted_pick(weights):
             t = np.cumsum(weights)
             s = np.sum(weights)
-            return int(np.searchsorted(t, np.random.rand(1) * s))
+            pick = np.random.rand(1) * temperature
+            return int(np.searchsorted(t, pick * s))
 
         if split_mode:
             rounds = itertools.count()
