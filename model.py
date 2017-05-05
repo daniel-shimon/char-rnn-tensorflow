@@ -89,9 +89,12 @@ class Model:
         self.train_op = optimizer.apply_gradients(zip(grads, tvars))
 
         # instrument tensorboard
-        tf.summary.histogram('logits', self.logits)
-        tf.summary.histogram('loss', loss)
-        tf.summary.scalar('train_loss', self.cost)
+        self.train_summary = tf.summary.merge([
+            tf.summary.histogram('logits', self.logits),
+            tf.summary.histogram('loss', loss),
+            tf.summary.scalar('train_loss', self.cost)
+        ])
+        self.test_summary = tf.summary.merge([tf.summary.scalar('test_loss', self.cost)])
 
     def sample(self, sess, chars, vocab, num, prime, sampling_type, split_mode, temperature):
         if split_mode:

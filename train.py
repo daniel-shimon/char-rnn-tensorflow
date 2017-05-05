@@ -12,7 +12,7 @@ from model import Model
 
 def main():
     parser = argparse.ArgumentParser(
-                        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     # environment:
     parser.add_argument('--dataset', type=str, default=None,
                         help='single name to use under directories (data, save and log)')
@@ -69,9 +69,8 @@ def train(args):
 
     with tf.Session() as sess:
         # instrument for tensorboard
-        summaries = tf.summary.merge_all()
         writer = tf.summary.FileWriter(
-                os.path.join(args.log_dir, time.strftime("%Y-%m-%d-%H-%M-%S")))
+            os.path.join(args.log_dir, time.strftime("%Y-%m-%d-%H-%M-%S")))
         writer.add_graph(sess.graph)
 
         sess.run(tf.global_variables_initializer())
@@ -99,8 +98,8 @@ def train(args):
                 start = time.time()
 
                 x, y = data_loader.next_batch()
-                train_loss = train_batch(current_iteration, initial_iteration, model,
-                                         sess, state, summaries, writer, x, y)
+                train_loss = batch(current_iteration, initial_iteration, model,
+                                         sess, state, writer, x, y, False)
 
                 end = time.time()
                 print("{}/{} (epoch {}), train_loss = {:.3f}, time/batch = {:.3f}"
@@ -108,9 +107,9 @@ def train(args):
                               args.num_epochs * data_loader.num_batches,
                               e, train_loss, end - start))
 
-                if current_iteration % args.save_every == 0\
+                if current_iteration % args.save_every == 0 \
                         or (e == args.num_epochs - 1 and
-                            b == data_loader.num_batches - 1):
+                                    b == data_loader.num_batches - 1):
                     # save for the last result
                     checkpoint_path = os.path.join(args.save_dir, 'model.ckpt')
                     saver.save(sess, checkpoint_path,
@@ -119,18 +118,40 @@ def train(args):
                         f.write(str(initial_iteration + current_iteration + 1))
                     print("model saved to {}".format(args.save_dir))
 
+            if (e + 1) % args.validation_every == 0:
+                if split_mode and e > 0:
+                    test_loader.create_batches()
+                test_loader.reset_batch_pointer()
+                state = sess.run(model.initial_state)
 
-def train_batch(current_iteration, initial_iteration, model, sess, state, summaries, writer, x, y):
+                for b in range(test_loader.num_batches):
+                    current_iteration = (e + 1) * data_loader.num_batches + b - test_loader.num_batches
+                    start = time.time()
+
+                    x, y = test_loader.next_batch()
+                    test_loss = batch(current_iteration, initial_iteration, model,
+                                       sess, state, writer, x, y, True)
+
+                    end = time.time()
+                    print("test {}/{} (epoch {}), test_loss = {:.3f}, time/batch = {:.3f}"
+                          .format(b,
+                                  test_loader.num_batches,
+                                  e, test_loss, end - start))
+
+
+def batch(current_iteration, initial_iteration, model, sess, state, writer, x, y, test):
     feed = {model.input_data: x, model.targets: y}
+    summary = model.test_summary if test else model.train_summary
 
     for i, (c, h) in enumerate(model.initial_state):
         feed[c] = state[i].c
         feed[h] = state[i].h
 
-    summ, train_loss, state, _ = sess.run([summaries, model.cost, model.final_state, model.train_op], feed)
+    summary_results, train_loss, state, _ = \
+        sess.run([summary, model.cost, model.final_state, model.train_op], feed)
 
     # instrument for tensorboard
-    writer.add_summary(summ, initial_iteration + current_iteration)
+    writer.add_summary(summary, initial_iteration + current_iteration)
     return train_loss
 
 
