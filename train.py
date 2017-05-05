@@ -6,7 +6,7 @@ import time
 import os
 from six.moves import cPickle
 
-from utils import TextLoader
+from utils import TextLoader, SharedVocabulary
 from model import Model
 
 
@@ -63,7 +63,7 @@ def main():
 def train(args):
     sort_environment(args)
 
-    data_loader, test_loader = load_data(args)
+    data_loader, test_loader, split_mode = load_data(args)
     ckpt, model = load_model(args)
     initial_iteration = 0
 
@@ -86,7 +86,7 @@ def train(args):
                     initial_iteration = int(f.read())
 
         for e in range(args.num_epochs):
-            if data_loader.split_mode and e > 0:
+            if split_mode and e > 0:
                 data_loader.create_batches()
             data_loader.reset_batch_pointer()
             state = sess.run(model.initial_state)
@@ -97,16 +97,10 @@ def train(args):
                 current_iteration = e * data_loader.num_batches + b
 
                 start = time.time()
-                x, y = data_loader.next_batch()
-                feed = {model.input_data: x, model.targets: y}
-                for i, (c, h) in enumerate(model.initial_state):
-                    feed[c] = state[i].c
-                    feed[h] = state[i].h
-                train_loss, state, _ = sess.run([model.cost, model.final_state, model.train_op], feed)
 
-                # instrument for tensorboard
-                summ, train_loss, state, _ = sess.run([summaries, model.cost, model.final_state, model.train_op], feed)
-                writer.add_summary(summ, initial_iteration + current_iteration)
+                x, y = data_loader.next_batch()
+                train_loss = train_batch(current_iteration, initial_iteration, model,
+                                         sess, state, summaries, writer, x, y)
 
                 end = time.time()
                 print("{}/{} (epoch {}), train_loss = {:.3f}, time/batch = {:.3f}"
@@ -124,6 +118,20 @@ def train(args):
                     with open(os.path.join(args.save_dir, 'step.info'), 'w') as f:
                         f.write(str(initial_iteration + current_iteration + 1))
                     print("model saved to {}".format(args.save_dir))
+
+
+def train_batch(current_iteration, initial_iteration, model, sess, state, summaries, writer, x, y):
+    feed = {model.input_data: x, model.targets: y}
+
+    for i, (c, h) in enumerate(model.initial_state):
+        feed[c] = state[i].c
+        feed[h] = state[i].h
+
+    summ, train_loss, state, _ = sess.run([summaries, model.cost, model.final_state, model.train_op], feed)
+
+    # instrument for tensorboard
+    writer.add_summary(summ, initial_iteration + current_iteration)
+    return train_loss
 
 
 def sort_environment(args):
@@ -193,31 +201,64 @@ def load_model(args):
 
 
 def load_data(args):
-    data_loader = TextLoader(args.data_dir, args.batch_size, args.seq_length)
-    args.vocab_size = data_loader.vocab_size
-    test_loader = None
-    # test_loader = TextLoader(args.data_dir, args.batch_size, args.seq_length)
+    shared_vocab = SharedVocabulary(args.data_dir, ['input', 'test'])
+    args.vocab_size = shared_vocab.vocab_size
+    data_loader = TextLoader('input', shared_vocab, args.batch_size, args.seq_length)
+    test_loader = TextLoader('test', shared_vocab, args.batch_size, args.seq_length)
 
-    try:
-        # open saved vocab/dict and check if vocabs/dicts are compatible
-        with open(os.path.join(args.init_from, 'chars_vocab.pkl'), 'rb') as f:
-            saved_chars, saved_vocab, saved_split_mode = cPickle.load(f)
-        assert saved_chars == data_loader.chars, "Data and loaded model disagree on character set!"
-        assert saved_vocab == data_loader.vocab, "Data and loaded model disagree on dictionary mappings!"
-        assert saved_split_mode == data_loader.split_mode, "Data and loaded model disagree on " \
-                                                           "whether input is split files!"
+    if args.init_from is not None:
+        # check if all necessary files exist
+        try:
+            assert os.path.isdir(args.init_from), " %s must be a a path" % args.init_from
+            assert os.path.isfile(
+                os.path.join(args.init_from, "config.pkl")), \
+                "config.pkl file does not exist in path %s" % args.init_from
+            assert os.path.isfile(os.path.join(args.init_from,
+                                               "chars_vocab.pkl")), \
+                "chars_vocab.pkl file does not exist in path %s" % args.init_from
+            assert os.path.isfile(os.path.join(args.init_from,
+                                               "step.info")), \
+                "step.info file does not exist in path %s" % args.init_from
+            ckpt = tf.train.get_checkpoint_state(args.init_from)
+            assert ckpt, "No checkpoint found"
+            assert ckpt.model_checkpoint_path, "No model path found in checkpoint"
 
-    except AssertionError as e:
-        if args.dataset:
-            print('model from ' + args.init_from + ' will not be used:', str(e))
-            args.init_from = None
-        else:
-            raise e
+            # open old config and check if models are compatible
+            with open(os.path.join(args.init_from, 'config.pkl'), 'rb') as f:
+                saved_model_args = cPickle.load(f)
+            need_be_same = ["model", "rnn_size", "num_layers"]
+            for key in need_be_same:
+                saved_value = vars(saved_model_args)[key]
+                if vars(args)[key] is None:
+                    setattr(args, key, saved_value)
+                else:
+                    assert saved_value == vars(args)[key], \
+                        "Command line argument and saved model disagree on '%s' " % key
+
+        except AssertionError as e:
+            if args.dataset:
+                print('model from ' + args.init_from + ' will not be used:', str(e))
+                args.init_from = None
+            else:
+                raise e
+        try:
+            # open saved vocab/dict and check if vocabs/dicts are compatible
+            with open(os.path.join(args.init_from, 'chars_vocab.pkl'), 'rb') as f:
+                saved_chars, saved_vocab, saved_split_mode = cPickle.load(f)
+            assert saved_chars == shared_vocab.chars, "Data and loaded model disagree on character set!"
+            assert saved_vocab == shared_vocab.vocab, "Data and loaded model disagree on dictionary mappings!"
+
+        except AssertionError as e:
+            if args.dataset:
+                print('model from ' + args.init_from + ' will not be used:', str(e))
+                args.init_from = None
+            else:
+                raise e
 
     with open(os.path.join(args.save_dir, 'chars_vocab.pkl'), 'wb') as f:
-        cPickle.dump((data_loader.chars, data_loader.vocab, data_loader.split_mode), f)
+        cPickle.dump((shared_vocab.chars, shared_vocab.vocab, shared_vocab.split_mode), f)
 
-    return data_loader, test_loader
+    return data_loader, test_loader, shared_vocab.split_mode
 
 
 if __name__ == '__main__':
