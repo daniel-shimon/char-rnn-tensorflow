@@ -256,13 +256,6 @@ def load_data(args):
                     assert saved_value == vars(args)[key], \
                         "Command line argument and saved model disagree on '%s' " % key
 
-        except AssertionError as e:
-            if args.dataset:
-                print('model from ' + args.init_from + ' will not be used:', str(e))
-                args.init_from = None
-            else:
-                raise e
-        try:
             # open saved vocab/dict and check if vocabs/dicts are compatible
             with open(os.path.join(args.init_from, 'chars_vocab.pkl'), 'rb') as f:
                 saved_chars, saved_vocab, saved_split_mode = cPickle.load(f)

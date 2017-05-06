@@ -112,6 +112,7 @@ class SharedVocabulary:
         self.data[name] = data
 
     def process_data(self):
+        self.chars = list(self.chars)
         self.vocab_size = len(self.chars)
         self.vocab = dict(zip(self.chars, range(len(self.chars))))
         with open(self.vocab_file, 'wb') as f:
