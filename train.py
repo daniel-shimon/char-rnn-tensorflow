@@ -69,9 +69,11 @@ def train(args):
 
     with tf.Session() as sess:
         # instrument for tensorboard
-        writer = tf.summary.FileWriter(
-            os.path.join(args.log_dir, time.strftime("%Y-%m-%d-%H-%M-%S")))
-        writer.add_graph(sess.graph)
+        train_writer = tf.summary.FileWriter(
+            os.path.join(args.log_dir, time.strftime("%d.%m.%y %H:%M:%S train")))
+        test_writer = tf.summary.FileWriter(
+            os.path.join(args.log_dir, time.strftime("%d.%m.%y %H:%M:%S test")))
+        train_writer.add_graph(sess.graph)
 
         sess.run(tf.global_variables_initializer())
         saver = tf.train.Saver(tf.global_variables())
@@ -85,6 +87,26 @@ def train(args):
                     initial_iteration = int(f.read())
 
         for e in range(args.num_epochs):
+            if e % args.validation_every == 0:
+                if split_mode and e > 0:
+                    test_loader.create_batches()
+                test_loader.reset_batch_pointer()
+                state = sess.run(model.initial_state)
+
+                for b in range(test_loader.num_batches):
+                    current_iteration = e * data_loader.num_batches + b
+                    start = time.time()
+
+                    x, y = test_loader.next_batch()
+                    test_loss = batch(current_iteration, initial_iteration, model,
+                                      sess, state, test_writer, x, y)
+
+                    end = time.time()
+                    print("test {}/{} (epoch {}), loss = {:.3f}, time/batch = {:.3f}"
+                          .format(b + 1,
+                                  test_loader.num_batches,
+                                  e, test_loss, end - start))
+
             if split_mode and e > 0:
                 data_loader.create_batches()
             data_loader.reset_batch_pointer()
@@ -94,16 +116,15 @@ def train(args):
 
             for b in range(data_loader.num_batches):
                 current_iteration = e * data_loader.num_batches + b
-
                 start = time.time()
 
                 x, y = data_loader.next_batch()
                 train_loss = batch(current_iteration, initial_iteration, model,
-                                         sess, state, writer, x, y, False)
+                                   sess, state, train_writer, x, y)
 
                 end = time.time()
-                print("{}/{} (epoch {}), train_loss = {:.3f}, time/batch = {:.3f}"
-                      .format(current_iteration,
+                print("{}/{} (epoch {}), loss = {:.3f}, time/batch = {:.3f}"
+                      .format(current_iteration + 1,
                               args.num_epochs * data_loader.num_batches,
                               e, train_loss, end - start))
 
@@ -118,40 +139,19 @@ def train(args):
                         f.write(str(initial_iteration + current_iteration + 1))
                     print("model saved to {}".format(args.save_dir))
 
-            if (e + 1) % args.validation_every == 0:
-                if split_mode and e > 0:
-                    test_loader.create_batches()
-                test_loader.reset_batch_pointer()
-                state = sess.run(model.initial_state)
 
-                for b in range(test_loader.num_batches):
-                    current_iteration = (e + 1) * data_loader.num_batches + b - test_loader.num_batches
-                    start = time.time()
-
-                    x, y = test_loader.next_batch()
-                    test_loss = batch(current_iteration, initial_iteration, model,
-                                       sess, state, writer, x, y, True)
-
-                    end = time.time()
-                    print("test {}/{} (epoch {}), test_loss = {:.3f}, time/batch = {:.3f}"
-                          .format(b,
-                                  test_loader.num_batches,
-                                  e, test_loss, end - start))
-
-
-def batch(current_iteration, initial_iteration, model, sess, state, writer, x, y, test):
+def batch(current_iteration, initial_iteration, model, sess, state, writer, x, y):
     feed = {model.input_data: x, model.targets: y}
-    summary = model.test_summary if test else model.train_summary
 
     for i, (c, h) in enumerate(model.initial_state):
         feed[c] = state[i].c
         feed[h] = state[i].h
 
     summary_results, train_loss, state, _ = \
-        sess.run([summary, model.cost, model.final_state, model.train_op], feed)
+        sess.run([model.summary, model.cost, model.final_state, model.train_op], feed)
 
     # instrument for tensorboard
-    writer.add_summary(summary, initial_iteration + current_iteration)
+    writer.add_summary(summary_results, initial_iteration + current_iteration)
     return train_loss
 
 
