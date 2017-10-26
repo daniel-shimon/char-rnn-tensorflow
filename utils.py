@@ -36,6 +36,12 @@ class TextLoader:
         else:
             tensor = self.tensor
 
+        # return zero batches if tensor is empty
+        if tensor.size == 0:
+            self.x_batches = np.zeros((self.batch_size, 0))
+            self.y_batches = np.zeros((self.batch_size, 0))
+            return
+
         # create batches
         self.num_batches = int((tensor.size - 1) / self.partition_size)
 
