@@ -26,9 +26,9 @@ def main():
                         help='continue training from saved model at this directory')
 
     # neural network:
-    parser.add_argument('--rnn-size', type=int, default=None,
+    parser.add_argument('--rnn-size', type=int, default=256,
                         help='size of RNN hidden state')
-    parser.add_argument('--num-layers', type=int, default=None,
+    parser.add_argument('--num-layers', type=int, default=1,
                         help='number of layers in the RNN')
     parser.add_argument('--model', type=str, default='lstm',
                         help='rnn, gru, lstm, or nas')
@@ -70,9 +70,9 @@ def train(args):
     with tf.Session() as sess:
         # instrument for tensorboard
         train_writer = tf.summary.FileWriter(
-            os.path.join(args.log_dir, time.strftime("%d.%m.%y %H:%M:%S train")))
+            os.path.join(args.log_dir, time.strftime("%d_%m_%y__%H_%M_%S__train")))
         test_writer = tf.summary.FileWriter(
-            os.path.join(args.log_dir, time.strftime("%d.%m.%y %H:%M:%S test")))
+            os.path.join(args.log_dir, time.strftime("%d_%m_%y__%H_%M_%S__test")))
         train_writer.add_graph(sess.graph)
 
         sess.run(tf.global_variables_initializer())
@@ -168,6 +168,8 @@ def sort_environment(args):
 
     if not os.path.isdir(args.save_dir):
         os.makedirs(args.save_dir)
+    if not os.path.isdir(args.log_dir):
+        os.makedirs(args.log_dir)
 
 
 def load_model(args):
@@ -276,4 +278,5 @@ def load_data(args):
 
 
 if __name__ == '__main__':
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
     main()

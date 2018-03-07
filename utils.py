@@ -26,7 +26,7 @@ class TextLoader:
     def create_batches(self):
         if self.split_mode:
             tensor = []
-            indices = range(len(self.tensor))
+            indices = list(range(len(self.tensor)))
             random.shuffle(indices)
 
             for i in indices:
@@ -90,6 +90,9 @@ class SharedVocabulary:
                     print("reading text files")
                     self.split_mode = True
                     self.read_folder(name, input_folder)
+                elif name == 'test':
+                    print('no test data found. ignoring')
+                    self.data[name] = None
                 else:
                     raise EnvironmentError('neither {} nor {} exist'.format(input_file, input_folder))
 
@@ -131,6 +134,8 @@ class SharedVocabulary:
                 for single_example in data:
                     tensors.append(np.array(list(map(self.vocab.get, single_example))))
                 self.tensors[name] = tensors
+            elif data is None:
+                self.tensors[name] = np.array([])
             else:
                 if self.split_mode:
                     data.insert(0, '\x02')
